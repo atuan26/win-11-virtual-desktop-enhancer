@@ -17,7 +17,21 @@ DetectHiddenWindows, On
 hwnd := WinExist("ahk_pid " . DllCall("GetCurrentProcessId","Uint"))
 hwnd += 0x1000 << 32
 
-hVirtualDesktopAccessor := DllCall("LoadLibrary", "Str", A_ScriptDir . "\libraries\virtual-desktop-accessor.dll", "Ptr")
+; Detect Windows version and load appropriate DLL
+windowsVersion := _GetWindowsVersion()
+dllPath := _GetVirtualDesktopAccessorDllPath(windowsVersion)
+
+if (!FileExist(dllPath)) {
+    MsgBox, 16, Error, Virtual Desktop Accessor DLL not found for %windowsVersion%.`n`nExpected file: %dllPath%`n`nPlease ensure you have the correct DLL for your Windows version.
+    ExitApp
+}
+
+hVirtualDesktopAccessor := DllCall("LoadLibrary", "Str", dllPath, "Ptr")
+
+if (!hVirtualDesktopAccessor) {
+    MsgBox, 16, Error, Failed to load Virtual Desktop Accessor DLL: %dllPath%`n`nPlease ensure the DLL is compatible with your system.
+    ExitApp
+}
 
 global GoToDesktopNumberProc := DllCall("GetProcAddress", Ptr, hVirtualDesktopAccessor, AStr, "GoToDesktopNumber", "Ptr")
 global RegisterPostMessageHookProc := DllCall("GetProcAddress", Ptr, hVirtualDesktopAccessor, AStr, "RegisterPostMessageHook", "Ptr")
@@ -48,6 +62,7 @@ VWMess(wParam, lParam, msg, hwnd) {
 Menu, Tray, NoStandard
 Menu, Tray, Add, &Manage Desktops, OpenDesktopManager
 Menu, Tray, Default, &Manage Desktops
+Menu, Tray, Add, Disable Copilot (Win+C), _DisableCopilotPermanently
 Menu, Tray, Add, Reload Settings, Reload
 Menu, Tray, Add, Exit, Exit
 Menu, Tray, Click, 1
@@ -130,7 +145,7 @@ for index in arrayS {
     hkComboUnpinApp           := RegExReplace(hkComboUnpinApp, arrayS[index], arrayR[index])
     hkComboTogglePinApp       := RegExReplace(hkComboTogglePinApp, arrayS[index], arrayR[index])
     hkComboOpenDesktopManager := RegExReplace(hkComboOpenDesktopManager, arrayS[index], arrayR[index])
-    hkComboChangeDesktopName    := RegExReplace(hkComboChangeDesktopName, arrayS[index], arrayR[index])    
+    hkComboChangeDesktopName    := RegExReplace(hkComboChangeDesktopName, arrayS[index], arrayR[index])
 }
 
 ; Setup key bindings dynamically
@@ -198,6 +213,17 @@ setUpHotkeyWithCombo(hkComboTogglePinApp, "OnTogglePinAppPress", "[KeyboardShort
 setUpHotkeyWithCombo(hkComboOpenDesktopManager, "OpenDesktopManager", "[KeyboardShortcutsCombinations] OpenDesktopManager")
 
 setUpHotkeyWithCombo(hkComboChangeDesktopName, "ChangeDesktopName", "[KeyboardShortcutsCombinations] ChangeDesktopName")
+
+; Add alternative window arrangement shortcuts (since we override the native ones)
+Hotkey, #!Left, MoveWindowLeft
+Hotkey, #!Right, MoveWindowRight
+Hotkey, #!Up, MaximizeWindow
+Hotkey, #!Down, MinimizeWindow
+
+; Disable Copilot (Win+C) and reclaim the shortcut
+Hotkey, #c, DisableCopilot
+; Add your custom Win+C functionality here
+; Hotkey, #c, YourCustomFunction
 
 if (GeneralTaskbarScrollSwitching) {
     Hotkey, ~WheelUp, OnTaskbarScrollUp
@@ -344,8 +370,15 @@ OnDesktopSwitch(n:=1) {
 ; ======================================================================
 
 SwitchToDesktop(n:=1) {
-    doFocusAfterNextSwitch=1
-    _ChangeDesktop(n)
+    currentDesktop := _GetCurrentDesktopNumber()
+    
+    ; If trying to switch to the same desktop, use Alt+Tab
+    if (n == currentDesktop) {
+        Send !{Tab}
+    } else {
+        doFocusAfterNextSwitch=1
+        _ChangeDesktop(n)
+    }
 }
 
 MoveToDesktop(n:=1) {
@@ -639,3 +672,77 @@ _ShowTooltipForPinnedApp(windowTitle) {
 _ShowTooltipForUnpinnedApp(windowTitle) {
     _ShowTooltip("App """ . _TruncateString(windowTitle, 30) . """ unpinned.")
 }
+
+; ======================================================================
+; Windows Version Detection and DLL Management
+; ======================================================================
+
+; Detect Windows version (10 or 11)
+_GetWindowsVersion() {
+    ; Get Windows version using registry
+    RegRead, currentVersion, HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion, CurrentVersion
+    RegRead, currentBuild, HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion, CurrentBuild
+
+    ; Windows 11 starts from build 22000
+    if (currentBuild >= 22000) {
+        return "Windows 11"
+    }
+    ; Windows 10 builds are typically 10240 and above
+    else if (currentBuild >= 10240) {
+        return "Windows 10"
+    }
+    else {
+        ; Fallback for older versions - assume Windows 10 for compatibility
+        return "Windows 10"
+    }
+}
+
+; Get the appropriate DLL path based on Windows version
+_GetVirtualDesktopAccessorDllPath(windowsVersion) {
+    if (windowsVersion == "Windows 11") {
+        return A_ScriptDir . "\libraries\virtual-desktop-accessor-win11.dll"
+    }
+    else {
+        ; Default to Windows 10 DLL
+        return A_ScriptDir . "\libraries\virtual-desktop-accessor.dll"
+    }
+}
+
+; ======================================================================
+; Window Arrangement Functions (Alternative shortcuts)
+; ======================================================================
+
+MoveWindowLeft() {
+    Send #{Left}
+}
+
+MoveWindowRight() {
+    Send #{Right}
+}
+
+MaximizeWindow() {
+    Send #{Up}
+}
+
+MinimizeWindow() {
+    Send #{Down}
+}
+
+DisableCopilot() {
+    ; Just intercept Win+C to prevent Copilot from opening
+    ; Do nothing - this frees up Win+C for other applications to use
+    return
+}
+
+; Function to permanently disable Copilot via registry (call once)
+_DisableCopilotPermanently() {
+    ; Disable Copilot in Windows 11
+    RegWrite, REG_DWORD, HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\WindowsCopilot, TurnOffWindowsCopilot, 1
+    
+    ; Also disable via another registry path
+    RegWrite, REG_DWORD, HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced, ShowCopilotButton, 0
+    
+    MsgBox, 64, Copilot Disabled, Copilot has been disabled permanently. You may need to restart Windows or log out/in for changes to take full effect.
+}
+
+

@@ -1,10 +1,10 @@
-# Windows 10 Virtual Desktop Enhancer
+# Windows 10/11 Virtual Desktop Enhancer
 
 **Warning:** I am officially no longer maintaining this project due to lack of time and interest. Thanks for using it and for all of your work towards helping me improve it. -sdias
 
 ## Introduction
 
-Windows 10 Virtual Desktop Enhancer is a [AutoHotkey](https://autohotkey.com/) script which adds some useful features to Windows 10 Virtual Desktops, like:
+Windows 10/11 Virtual Desktop Enhancer is a [AutoHotkey](https://autohotkey.com/) script which adds some useful features to Windows 10 and Windows 11 Virtual Desktops, like:
 
 - Extra customizable keyboard shortcuts to switch or move a window to a different desktop
 - Customizable keyboard shortcuts to pin a window or a program to all desktops
@@ -20,9 +20,10 @@ Windows 10 Virtual Desktop Enhancer is a [AutoHotkey](https://autohotkey.com/) s
 - [Known issues](docs/known-issues.md)
 - [Request assistance](docs/issue-page.md)
 
+
 ## Installation
 
-Windows 10 Virtual Desktop Enhancer is extremely easy to install: you just have to download and extract the latest version of the script.
+Windows 10/11 Virtual Desktop Enhancer is extremely easy to install: you just have to download and extract the latest version of the script.
 
 Please read [the installation page](docs/installation.md) for more detailed instructions.
 
